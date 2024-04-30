@@ -19,22 +19,24 @@
 #define UltrasonicPins      12, 13
 #define UltrasonicTimeout   40000UL
 #define UltrasonicClk       1000
+#define UltrasonicDistance  5
 /////////////////////////////////
 
 // Stepper ///////////////////////////////////
-#define StepperPins         10, 8, 9, 7 
+
+#define StepperPins1        10, 8, 9, 7
+#define StepperPins2        6, 4, 5, 3      
 #define StepperSteps        2048 // a boleo tu
-#define StepperSpeed        5
-#define SteppsForClk        5
+#define StepperSpeed        10
+#define SteppsForClk        4
 
 #define StepperModeGo       0
 #define StepperModeBack     1
-#define StepeprModeTurn     2
+#define StepperModeTurn     2
 
 #define RuedasAtrasTimer      5000
 #define RuedasGirarTimer      5000
 //////////////////////////////////////////////
-
 
 /********* IR Variables **********/
 extern IRrecv IrReceiver;
@@ -44,8 +46,6 @@ IRData IRCode;
 #define IRCode_On_OFF        69
 
 unsigned long millis_IR();
-
-
 
 //  CLK -----------------------
 unsigned long IRThisMillis = 0;
@@ -63,7 +63,8 @@ unsigned long UltrasonicLastMillis = 0;
 /*****************************************/
 
 /********* Steeper Variables **************/
-Stepper stepper(StepperSteps, StepperPins);
+Stepper stepper1(StepperSteps, StepperPins1);
+Stepper stepper2(StepperSteps, StepperPins2); // Cambiar el StepperPins
 
 int SteeperMode = 0;
 // Ruedas CLK ----------------------------
@@ -71,9 +72,6 @@ unsigned long RuedasThisMillis = 0;
 unsigned long RuedasLastMillis = 0;
 //----------------------------------------
 /******************************************/
-
-
-
 
 /******** TASKS ********/
 void IR_task();
@@ -88,10 +86,12 @@ void RuedasGirar();
 uint8_t mode = MODE_SLEEP;
 
 void setup() {
+  pinMode(2, OUTPUT);
   Serial.begin(9600);
   IrReceiver.begin(IRpin);
   ultrasonic.setTimeout(UltrasonicTimeout);
-  stepper.setSpeed(StepperSpeed);
+  stepper1.setSpeed(StepperSpeed);
+  stepper2.setSpeed(StepperSpeed);
   ////Debug IR
   // Serial.println("-IR info: ");
   // Serial.println("      millis_IR(): " + String(millis_IR()) + " mSeg"); 
@@ -102,6 +102,9 @@ void loop() {
   {
   case MODE_SLEEP:
     IR_task();
+    for (int pin = 3; pin <= 10; pin++) {
+      digitalWrite(pin, LOW);
+    }
     break;
   
   case MODE_WAKE:
@@ -130,18 +133,18 @@ void IR_task(){
       return;
     }
     IrReceiver.resume();
-    Serial.println("\r\n************** DEBUG IR *************");
-    Serial.print("\r\nComando IR: "); Serial.println(IRCode.command);
+    //Serial.println("\r\n************** DEBUG IR *************");
+    //Serial.print("\r\nComando IR: "); Serial.println(IRCode.command);
     
     switch (IRCode.command)
     {
     case IRCode_On_OFF:
       if(mode == MODE_SLEEP){
-        Serial.println("Mode: WAKE");
+        //Serial.println("Mode: WAKE");
         mode = MODE_WAKE;
       } else
       if(mode == MODE_WAKE){
-        Serial.println("Mode: SLEEP");
+        //Serial.println("Mode: SLEEP");
         mode = MODE_SLEEP;
       } 
       break;
@@ -153,36 +156,22 @@ void IR_task(){
   }
 }
 
-void Ultrasonic_task(){
-  UltrasonicThisMillis = millis();
-  if(UltrasonicThisMillis - UltrasonicLastMillis >= UltrasonicClk){
-    int cm = ultrasonic.read(CM);
-    if(cm < 5){
-      Serial.println("UltrasonicSignal [OK]");
-      SteeperMode = (int)StepperModeBack;
-    } else {
-    Serial.print("Distance in CM: ");Serial.println(cm);
-    UltrasonicLastMillis = UltrasonicThisMillis;
-    }
-  }
-}
-
 void Stepper_task(){
-  Serial.println("\r\n************** DEBUG STEPPER *************");
-  Serial.print("\r\nSteeperMode: "); 
+  //Serial.println("\r\n************** DEBUG STEPPER *************");
+  //Serial.print("\r\nSteeperMode: "); 
   switch (SteeperMode)
   {
   case (int)StepperModeGo:
-    Serial.println("StepperModeGo");
+    //Serial.println("StepperModeGo");
     RuedasAdelante();
     break;
   
   case (int)StepperModeBack:
-    Serial.println("StepperModeBack");
+    //Serial.println("StepperModeBack");
     RuedasAtras();
 
-  case (int)StepeprModeTurn:
-    Serial.println("StepperModeTurn ::");Serial.println(SteeperMode);
+  case (int)StepperModeTurn:
+    //Serial.println("StepperModeTurn ::");Serial.println(SteeperMode);
     RuedasGirar();
     break;
 
@@ -191,27 +180,45 @@ void Stepper_task(){
   }
 }
 
+void Ultrasonic_task(){
+  UltrasonicThisMillis = millis();
+  if(UltrasonicThisMillis - UltrasonicLastMillis >= UltrasonicClk){
+    int cm = ultrasonic.read(CM);
+    if(cm < UltrasonicDistance){
+      //Serial.println("UltrasonicSignal [OK]");
+      SteeperMode = (int)StepperModeBack;
+    } else {
+    //Serial.print("Distance in CM: ");Serial.println(cm);
+    UltrasonicLastMillis = UltrasonicThisMillis;
+    }
+  }
+}
+
+
 void RuedasAdelante(){
-  stepper.step(SteppsForClk);
+  stepper1.step(SteppsForClk);
+  stepper2.step(SteppsForClk);
   RuedasLastMillis = millis();
 }
 
 void RuedasAtras(){
   RuedasThisMillis = millis();
-  Serial.print("Operacion: ");Serial.print(RuedasThisMillis);Serial.print(", ");Serial.println(RuedasLastMillis);
+  //Serial.print("Operacion: ");Serial.print(RuedasThisMillis);Serial.print(", ");Serial.println(RuedasLastMillis);
   if(((int)RuedasThisMillis - (int)RuedasLastMillis) < RuedasAtrasTimer){
-    stepper.step(-SteppsForClk);  
+    stepper1.step(-SteppsForClk);  
+    stepper2.step(-SteppsForClk);
   } else if(((int)RuedasThisMillis - (int)RuedasLastMillis) >= RuedasAtrasTimer){
-    SteeperMode = StepeprModeTurn;
+    SteeperMode = StepperModeTurn;
     RuedasLastMillis = RuedasThisMillis;
   }
 }
 
 void RuedasGirar(){
   RuedasThisMillis = millis();
-    Serial.print("Operacion: ");Serial.print(RuedasThisMillis);Serial.print(", ");Serial.println(RuedasLastMillis);
+  //Serial.print("Operacion: ");Serial.print(RuedasThisMillis);Serial.print(", ");Serial.println(RuedasLastMillis);
   if((int)RuedasThisMillis - (int)RuedasLastMillis < RuedasGirarTimer){
     //stepper.step(SteppsForClk);  
+    stepper2.step(-SteppsForClk);
   } else {
     SteeperMode = StepperModeGo;
     RuedasLastMillis = RuedasThisMillis;
